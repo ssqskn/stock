@@ -1,0 +1,8 @@
+#coding:utf8
+
+SQL_URL  = "127.0.0.1"
+SQL_DBNAME = "stock"
+SQL_USERNAME = "root"
+SQL_PASSWORD = "Aa323232"
+
+BIGDEAL_VOL = 100
