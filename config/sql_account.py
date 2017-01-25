@@ -3,6 +3,6 @@
 SQL_URL  = "127.0.0.1"
 SQL_DBNAME = "stock"
 SQL_USERNAME = "root"
-SQL_PASSWORD = "Aa323232"
+SQL_PASSWORD = "xxxxxxxx"
 
 BIGDEAL_VOL = 100
