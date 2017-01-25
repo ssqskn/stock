@@ -1,4 +1,4 @@
-#coding:utf8
+#coding:utf-8
 from src.python.api.StockData import StockData
 from src.python.utils.sql_engine import SqlEngine
 from src.python.utils.utils import add_md5_col
@@ -52,7 +52,7 @@ class StockDataInitializer(StockData):
                              "cl_terminated": ts.get_terminated,
                              "cl_suspended": ts.get_suspended
                             }
-        for table_name, func in table_map.iteritems():
+        for table_name, func in table_map.items():
             try:
                 data = func()
                 data_md5 = add_md5_col(data)   ##add md5 column
@@ -73,7 +73,7 @@ class StockDataInitializer(StockData):
                              "op_debtpaying_data": ts.get_debtpaying_data,
                              "op_cashflow_data": ts.get_cashflow_data
                             }
-        for table_name, func in table_map.iteritems():
+        for table_name, func in table_map.items():
             try:
                 data = func(self.year, self.quarter)
                 data["quarter"] = str(self.year) + "-" + str(self.quarter)
@@ -101,7 +101,7 @@ class StockDataInitializer(StockData):
                              "eco_shibor_data": ts.shibor_data,
                              "eco_lpr_data": ts.lpr_data
                             }
-        for table_name, func in table_map.iteritems():
+        for table_name, func in table_map.items():
             try:
                 data = func()
                 data_md5 = add_md5_col(data)    ##add md5 column
@@ -214,7 +214,7 @@ def fetch_bigdeal_one(rec):
 
 if __name__ == "__main__":
     ## 全部数据提取的flag
-    is_first_time = False
+    is_first_time = True
     
     initializer = StockDataInitializer()
     initializer.fetch_all(is_first_time=is_first_time)

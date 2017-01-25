@@ -1,4 +1,4 @@
-#coding:utf8
+#coding:utf-8
 from sqlalchemy import create_engine
 from config.sql_account import SQL_USERNAME, SQL_PASSWORD, SQL_URL, SQL_DBNAME
 

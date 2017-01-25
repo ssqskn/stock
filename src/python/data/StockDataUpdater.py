@@ -1,4 +1,4 @@
-#coding:utf8
+#coding:utf-8
 from src.python.data.StockDataInitializer import fetch_bigdeal_one
 from src.python.api.StockData import StockData
 from src.python.utils.utils import add_md5_col, forward_ndays

@@ -1,4 +1,4 @@
-#coding:utf8
+#coding:utf-8
 from src.python.utils.sql_engine import SqlEngine
 from sqlalchemy.orm import sessionmaker
 

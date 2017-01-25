@@ -1,4 +1,4 @@
-#coding:utf8
+#coding:utf-8
 import tushare as ts
 
 show_all = False
