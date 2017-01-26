@@ -67,7 +67,7 @@ class StockDataUpdater(StockData):
                              "cl_terminated": ts.get_terminated,
                              "cl_suspended": ts.get_suspended
                             }
-        for table_name, func in table_map.iteritems():
+        for table_name, func in table_map.items():
             try:
                 md5_set = self.session.execute("select md5_without_op_day from "+str(table_name)).fetchall()
                 md5_set = set([str(i[0]) for i in md5_set])
@@ -94,7 +94,7 @@ class StockDataUpdater(StockData):
                              "op_debtpaying_data": ts.get_debtpaying_data,
                              "op_cashflow_data": ts.get_cashflow_data
                             }
-        for table_name, func in table_map.iteritems():
+        for table_name, func in table_map.items():
             try:
                 md5_set = self.session.execute("select md5_without_op_day from "+str(table_name)).fetchall()
                 md5_set = set([str(i[0]) for i in md5_set])
@@ -128,7 +128,7 @@ class StockDataUpdater(StockData):
                              "eco_shibor_data": ts.shibor_data,
                              "eco_lpr_data": ts.lpr_data
                             }
-        for table_name, func in table_map.iteritems():
+        for table_name, func in table_map.items():
             try:
                 md5_set = self.session.execute("select md5_without_op_day from "+str(table_name)).fetchall()
                 md5_set = set([str(i[0]) for i in md5_set])
@@ -153,7 +153,7 @@ class StockDataUpdater(StockData):
         #stock_code = ts.get_area_classified()["code"].values.tolist()
         stock_code = [i[0] for i in self.session.execute("select code from cl_area").fetchall()]
         code_date_pair = self.session.execute("select code, date from hist_trading_day \
-                                                                    where date >= '%s' group by code, day" %self.start_day).fetchall()
+                                                                    where date >= '%s' group by code, date" %self.start_day).fetchall()
         data_all = None
         for idx, code in enumerate(stock_code):
             try: 
@@ -167,7 +167,7 @@ class StockDataUpdater(StockData):
             else:
                 data_all = data_all.append(data)
             if idx % 100 == 0:
-                print("---%s stocks deal data fetched with %ss---" %(idx, round(time.time()-tic, 1)))
+                print("---%s stocks trading data fetched with %ss---" %(idx, round(time.time()-tic, 1)))
         data_all = data_all.reset_index(drop=True)
         if len(data_all) > 0:
             data_all.to_sql("hist_trading_day", self.engine, if_exists="append", index=False)
@@ -184,6 +184,7 @@ class StockDataUpdater(StockData):
         code_date_pair_new = self.session.execute("select code, date from hist_trading_day \
                                                                            where date >= '%s' group by code, date" %start_day_bd).fetchall()
         code_date_pair_new = [i for i in code_date_pair_new if i not in code_date_pair]
+        print("Start fetching stock bigdeal data, total records:%s" % len(code_date_pair_new))
         
         global counter_for_bigdeal, n_records_for_bigdeal
         counter_for_bigdeal = 0
@@ -203,11 +204,12 @@ class StockDataUpdater(StockData):
             self.update_stock_basics()
             self.update_stock_classification()
             self.update_economic_data()
-        #self.update_trading_data()
-        #self.update_bigdeal()
+            self.update_trading_data()
+            self.update_bigdeal()
         
     
 if __name__ == "__main__":
+    is_update = True
     stockDataUpdater = StockDataUpdater()
-    stockDataUpdater.update_all()
+    stockDataUpdater.update_all(is_update=is_update)
 
