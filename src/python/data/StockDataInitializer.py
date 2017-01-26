@@ -161,7 +161,7 @@ class StockDataInitializer(StockData):
             print("error when loading code, date from hist_trading_day", e)
             raise Exception(e)
         
-        for _ in range(row_count / batch_size + 1):
+        for _ in range(int(row_count // batch_size) + 1):
             result = result_cursor.fetchmany(size=batch_size)
             threads = threadpool.makeRequests(fetch_bigdeal_one, result)
             for t in threads:
