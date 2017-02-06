@@ -31,9 +31,9 @@ class StockData(object):
     
     def last_two_quarter(self):
         if self.quarter == 1:
-            return int(self.year)-1, 4
-        elif self.quarter == 2:
             return int(self.year)-1, 3
+        elif self.quarter == 2:
+            return int(self.year)-1, 4
         else:
             return self.year, self.quarter-2
     

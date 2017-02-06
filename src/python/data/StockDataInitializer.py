@@ -73,10 +73,11 @@ class StockDataInitializer(StockData):
                              "op_debtpaying_data": ts.get_debtpaying_data,
                              "op_cashflow_data": ts.get_cashflow_data
                             }
+        yy, quarter = self.last_two_quarter()
         for table_name, func in table_map.items():
             try:
-                data = func(self.year, self.quarter)
-                data["quarter"] = str(self.year) + "-" + str(self.quarter)
+                data = func(yy, quarter)
+                data["quarter"] = str(yy) + "-" + str(quarter)
                 data_md5 = add_md5_col(data)   ##add md5 column
                 data["op_day"] = self.today
                 data["md5_without_op_day"] = data_md5
@@ -181,7 +182,8 @@ class StockDataInitializer(StockData):
             self.__fetch_economic_data()
             self.__fetch_trading_data()
             self.__fetch_bigdeal_all(start="2016-12-28", end=self.today)
-        
+        self.__fetch_stock_operating_data()
+            
         
 def fetch_bigdeal_one(rec):
     """ 获取一条大单数据 """
@@ -214,7 +216,7 @@ def fetch_bigdeal_one(rec):
 
 if __name__ == "__main__":
     ## 全部数据提取的flag
-    is_first_time = True
+    is_first_time = False
     
     initializer = StockDataInitializer()
     initializer.fetch_all(is_first_time=is_first_time)

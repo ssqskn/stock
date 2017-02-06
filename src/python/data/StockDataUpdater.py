@@ -94,13 +94,14 @@ class StockDataUpdater(StockData):
                              "op_debtpaying_data": ts.get_debtpaying_data,
                              "op_cashflow_data": ts.get_cashflow_data
                             }
+        yy, quarter = self.last_quarter()
         for table_name, func in table_map.items():
             try:
                 md5_set = self.session.execute("select md5_without_op_day from "+str(table_name)).fetchall()
                 md5_set = set([str(i[0]) for i in md5_set])
 
-                data = func(self.year, self.quarter)
-                data["quarter"] = str(self.year) + "-" + str(self.quarter)
+                data = func(yy, quarter)
+                data["quarter"] = str(yy) + "-" + str(quarter)
                 data_md5 = add_md5_col(data)   ##add md5 column
                 data["op_day"] = self.today
                 data["md5_without_op_day"] = data_md5
