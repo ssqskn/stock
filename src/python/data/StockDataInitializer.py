@@ -1,7 +1,6 @@
 #coding:utf-8
 from src.python.api.StockData import StockData
 from src.python.utils.sql_engine import SqlEngine
-from src.python.utils.utils import add_md5_col
 from config.sql_account import BIGDEAL_VOL
 import tushare.util.dateu as du
 import threading, threadpool
@@ -25,7 +24,9 @@ class StockDataInitializer(StockData):
         """ 获取股票列表 """
         try:
             data = ts.get_area_classified()
+            data = data.drop_duplicates().reset_index(drop=True)
             data[["code", "name"]].to_sql("stock_list", self.engine, if_exists="replace", index=False)
+            self.session.execute("alter table stock_list add primary key(code(6));")   ##增加主键约束
         except Exception as e:
             print("error when fetching stock list", e)        
         print("End fetching stock list with %ss used" % round(time.time()-tic, 1))
@@ -35,6 +36,8 @@ class StockDataInitializer(StockData):
         try:
             data = ts.get_stock_basics()
             data["op_day"] = du.today()
+            data = data.fillna("")
+            data = data.drop_duplicates().reset_index(drop=True)
             data.to_sql("stock_basics", self.engine, if_exists="replace", index=False)
         except Exception as e:
             print("error when fetching stock basics", e)
@@ -43,22 +46,23 @@ class StockDataInitializer(StockData):
     def __fetch_stock_classification(self):
         """ 获取股票的各项分类数据 """
         table_map = {
-                             "cl_industry" : ts.get_industry_classified,
-                             "cl_concept": ts.get_concept_classified,
-                             "cl_area": ts.get_area_classified,
-                             "cl_sme": ts.get_sme_classified,
-                             "cl_gem": ts.get_gem_classified,
-                             "cl_st": ts.get_st_classified,
-                             "cl_terminated": ts.get_terminated,
-                             "cl_suspended": ts.get_suspended
+                             "cl_industry" : {"func":ts.get_industry_classified, "uq_key":"uq_cli_code_name(code(6), c_name(30))"},
+                             "cl_concept":  {"func":ts.get_concept_classified, "uq_key":"uq_clc_code_name(code(6), c_name(30))"},
+                             "cl_area":  {"func":ts.get_area_classified, "uq_key":"uq_cla_code(code(6))"},
+                             "cl_sme":  {"func":ts.get_sme_classified, "uq_key":"uq_clsme_code(code(6))"},
+                             "cl_gem":  {"func":ts.get_gem_classified, "uq_key":"uq_clg_code(code(6))"},
+                             "cl_st":  {"func":ts.get_st_classified, "uq_key":"uq_clst_code(code(6))"},
+                             "cl_terminated":  {"func":ts.get_terminated, "uq_key":"uq_clt_code(code(6))"},
+                             "cl_suspended":  {"func":ts.get_suspended, "uq_key":"uq_clsus_code(code(6))"}
                             }
-        for table_name, func in table_map.items():
+        for table_name, value in table_map.items():
             try:
-                data = func()
-                data_md5 = add_md5_col(data)   ##add md5 column
+                data = value["func"]()
                 data["op_day"] = self.today
-                data["md5_without_op_day"] = data_md5
+                data = data.fillna("")
+                data = data.drop_duplicates().reset_index(drop=True)
                 data.to_sql(table_name, self.engine, if_exists="replace", index=False)
+                self.session.execute("alter table %s add unique key %s;" % (table_name, value["uq_key"]))
             except Exception as e:
                 print("error when fetching %s" %table_name, e)        
             print("End fetching %s with %ss used" % (table_name, round(time.time()-tic, 1)))
@@ -66,22 +70,23 @@ class StockDataInitializer(StockData):
     def __fetch_stock_operating_data(self):
         """ 获取股票的运营数据，包括主报表、盈利能力、运营能力、成长能力、偿债能力、现金流量各项指标 """
         table_map = {
-                             "op_report_data" : ts.get_report_data,
-                             "op_profit_data": ts.get_profit_data,
-                             "op_operation_data": ts.get_operation_data,
-                             "op_growth_data": ts.get_growth_data,
-                             "op_debtpaying_data": ts.get_debtpaying_data,
-                             "op_cashflow_data": ts.get_cashflow_data
+                             "op_report_data" : {"func":ts.get_report_data, "uq_key":"uq_opr_code_qrt(code(6), quarter(10))"},
+                             "op_profit_data": {"func":ts.get_profit_data, "uq_key":"uq_opp_code_qrt(code(6), quarter(10))"},
+                             "op_operation_data": {"func":ts.get_operation_data, "uq_key":"uq_opo_code_qrt(code(6), quarter(10))"},
+                             "op_growth_data": {"func":ts.get_growth_data, "uq_key":"uq_opg_code_qrt(code(6), quarter(10))"},
+                             "op_debtpaying_data": {"func":ts.get_debtpaying_data, "uq_key":"uq_opd_code_qrt(code(6), quarter(10))"},
+                             "op_cashflow_data": {"func":ts.get_cashflow_data, "uq_key":"uq_opc_code_qrt(code(6), quarter(10))"}
                             }
         yy, quarter = self.last_two_quarter()
-        for table_name, func in table_map.items():
+        for table_name, value in table_map.items():
             try:
-                data = func(yy, quarter)
+                data = value["func"](yy, quarter)
                 data["quarter"] = str(yy) + "-" + str(quarter)
-                data_md5 = add_md5_col(data)   ##add md5 column
                 data["op_day"] = self.today
-                data["md5_without_op_day"] = data_md5
+                data = data.drop_duplicates().reset_index(drop=True)
+                data = data.fillna("")
                 data.to_sql(table_name, self.engine, if_exists="replace", index=False)
+                self.session.execute("alter table %s add unique key %s;" % (table_name, value["uq_key"]))
             except Exception as e:
                 print("error when fetching %s" %table_name, e)
             print("End fetching %s with %ss used" % (table_name, round(time.time()-tic, 1)))
@@ -89,26 +94,27 @@ class StockDataInitializer(StockData):
     def __fetch_economic_data(self):
         """ 获取宏观经济数据 """
         table_map = {
-                             "eco_deposit_rate" : ts.get_deposit_rate,
-                             "eco_loan_rate" : ts.get_loan_rate,
-                             "eco_reserve_deposit_ratio": ts.get_rrr,
-                             "eco_money_supply": ts.get_money_supply,
-                             "eco_gdp_quarter": ts.get_gdp_quarter,
-                             "eco_cpi": ts.get_cpi,
-                             "eco_ppi": ts.get_ppi,
-                             "eco_gdp_for": ts.get_gdp_for,
-                             "eco_gdp_pull": ts.get_gdp_pull,
-                             "eco_gdp_contrib": ts.get_gdp_contrib,
-                             "eco_shibor_data": ts.shibor_data,
-                             "eco_lpr_data": ts.lpr_data
+                             "eco_deposit_rate" : {"func":ts.get_deposit_rate, "uq_key":"uq_eco1(date(10), deposit_type(100))"},
+                             "eco_loan_rate" : {"func":ts.get_loan_rate, "uq_key":"uq_eco2(date(10), loan_type(100))"},
+                             "eco_reserve_deposit_ratio": {"func":ts.get_rrr, "uq_key":"uq_eco3(date(10))"},
+                             "eco_money_supply": {"func":ts.get_money_supply, "uq_key":"uq_eco4(month(10))"},
+                             "eco_gdp_quarter": {"func":ts.get_gdp_quarter, "uq_key":"uq_eco5(quarter)"},
+                             "eco_cpi": {"func":ts.get_cpi, "uq_key":"uq_eco6(month(10))"},
+                             "eco_ppi": {"func":ts.get_ppi, "uq_key":"uq_eco7(month(10))"},
+                             "eco_gdp_for": {"func":ts.get_gdp_for, "uq_key":"uq_eco8(year)"},
+                             "eco_gdp_pull": {"func":ts.get_gdp_pull, "uq_key":"uq_eco9(year)"},
+                             "eco_gdp_contrib": {"func":ts.get_gdp_contrib, "uq_key":"uq_eco10(year)"},
+                             "eco_shibor_data": {"func":ts.shibor_data, "uq_key":"uq_eco11(date)"},
+                             "eco_lpr_data": {"func":ts.lpr_data, "uq_key":"uq_eco12(date)"}
                             }
-        for table_name, func in table_map.items():
+        for table_name, value in table_map.items():
             try:
-                data = func()
-                data_md5 = add_md5_col(data)    ##add md5 column
+                data = value["func"]()
                 data["op_month"] = str(self.year) + "-" + str(self.month)
-                data["md5_without_op_day"] = data_md5
+                data = data.fillna("")
+                data = data.drop_duplicates().reset_index(drop=True)
                 data.to_sql(table_name, self.engine, if_exists="replace", index=False)
+                self.session.execute("alter table %s add unique key %s;" % (table_name, value["uq_key"]))
             except Exception as e:
                 print("error when fetching %s" %table_name, e)        
             print("End fetching %s with %ss used" % (table_name, round(time.time()-tic, 1)))
@@ -134,12 +140,12 @@ class StockDataInitializer(StockData):
         
         ##TODO: 用多线程进行数据获取
         ##TODO: 按照(code, date)配对有重复，需核查(mysql中用group by检查下)
-        
         stock_code = ts.get_area_classified()["code"].values.tolist()
         for idx, code in enumerate(stock_code):
             try:
                 data = _fetch_one(code=code)
                 data["op_day"] = self.today
+                data = data.fillna("")
                 if idx == 0:
                     data.to_sql("hist_trading_day", self.engine, if_exists="fail", index=False)
                 else:
@@ -147,6 +153,7 @@ class StockDataInitializer(StockData):
                 print("---%s: success in fetching histrory data of code %s" % (idx, code))
             except Exception as e:
                 print("---%s: error in fetching histrory data of code %s" % (idx, code), e)
+        self.session.execute("alter table hist_trading_day add unique key hist_day_1(code(6), date(10));")
         print("End fetching trading data with %ss used" % round(time.time()-tic, 1))
 
     def __fetch_bigdeal_all(self, start, end, batch_size=1000, n_threads=50):
@@ -182,8 +189,7 @@ class StockDataInitializer(StockData):
             self.__fetch_economic_data()
             self.__fetch_trading_data()
             self.__fetch_bigdeal_all(start="2016-12-28", end=self.today)
-        self.__fetch_stock_operating_data()
-            
+
         
 def fetch_bigdeal_one(rec):
     """ 获取一条大单数据 """

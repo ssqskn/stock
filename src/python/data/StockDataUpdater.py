@@ -31,15 +31,18 @@ class StockDataUpdater(StockData):
         op_day = self.session.execute(sql).first()[0]
         assert op_day is not None
         return str(op_day)
+
     
     def update_stock_list(self):
         """ 更新股票列表 """
         try:
             data = ts.get_area_classified()
-            data[["code", "name"]].to_sql("stock_list", self.engine, if_exists="replace", index=False)
+            values = ",".join([str(tuple(i)) for i in data[["code", "name"]].values])
+            self.session.execute("replace into stock_list values %s; commit;" % values)
         except Exception as e:
             print("error when fetching stock list", e)
         print("End updating stock list with %ss used" % round(time.time()-tic, 1))
+
 
     def update_stock_basics(self):
         """ 更新股票基本信息 """
@@ -50,10 +53,12 @@ class StockDataUpdater(StockData):
         try:
             data = ts.get_stock_basics()
             data["op_day"] = self.today
+            data = data.fillna("")
             data.to_sql("stock_basics", self.engine, if_exists="append", index=False)
         except Exception as e:
             print("error when updating stock basics", e)
         print("End updating stock basics with %ss used" % round(time.time()-tic, 1))
+
 
     def update_stock_classification(self):
         """ 更新股票分类数据 """
@@ -69,20 +74,16 @@ class StockDataUpdater(StockData):
                             }
         for table_name, func in table_map.items():
             try:
-                md5_set = self.session.execute("select md5_without_op_day from "+str(table_name)).fetchall()
-                md5_set = set([str(i[0]) for i in md5_set])
-                
                 data = func()
-                data_md5 = add_md5_col(data)
                 data["op_day"] = self.today
-                data["md5_without_op_day"] = data_md5
-                data = data[~data["md5_without_op_day"].isin(md5_set)].reset_index(drop=True)
+                data = data.fillna("")
                 if len(data) > 0:
-                    data.to_sql(table_name, self.engine, if_exists="append", index=False)
-                print("---%s records added for table: %s with %ss used---" % (len(data), table_name, round(time.time()-tic, 1)))
+                    values = ",".join([str(tuple(i)) for i in data.values])
+                    self.session.execute("insert ignore into %s values %s; commit;" % (table_name, values))
+                print("---updated table: %s with %ss used---" % (table_name, round(time.time()-tic, 1)))
             except Exception as e:
                 print("error when fetching %s  with %ss used" %(table_name, round(time.time()-tic, 1)), e)
-                raise Exception(e)
+
 
     def update_stock_operating_data(self):
         """ 更新股票的运营数据"""
@@ -94,25 +95,21 @@ class StockDataUpdater(StockData):
                              "op_debtpaying_data": ts.get_debtpaying_data,
                              "op_cashflow_data": ts.get_cashflow_data
                             }
-        yy, quarter = self.last_quarter()
-        for table_name, func in table_map.items():
-            try:
-                md5_set = self.session.execute("select md5_without_op_day from "+str(table_name)).fetchall()
-                md5_set = set([str(i[0]) for i in md5_set])
-
-                data = func(yy, quarter)
-                data["quarter"] = str(yy) + "-" + str(quarter)
-                data_md5 = add_md5_col(data)   ##add md5 column
-                data["op_day"] = self.today
-                data["md5_without_op_day"] = data_md5
-                data = data[~data["md5_without_op_day"].isin(md5_set)].reset_index(drop=True)
-                if len(data) > 0:
-                    data.to_sql(table_name, self.engine, if_exists="append", index=False)
-                print("---%s records added for table: %s with %ss used---" % (len(data), table_name, round(time.time()-tic, 1)))
-            except Exception as e:
-                print("error when fetching %s" %table_name, e)
-            print("End fetching %s with %ss used" % (table_name, round(time.time()-tic, 1)))
-        
+        for yy, quarter in [self.last_two_quarter(), self.last_quarter()]:
+            for table_name, func in table_map.items():
+                try:
+                    data = func(yy, quarter)
+                    data["quarter"] = str(yy) + "-" + str(quarter)
+                    data["op_day"] = self.today
+                    data = data.fillna("")
+                    if len(data) > 0:
+                        values = ",".join([str(tuple(i)) for i in data.values])
+                        self.session.execute("insert ignore into %s values %s; commit;" % (table_name, values))
+                    print("---updated table: %s with %ss used---" % (table_name, round(time.time()-tic, 1)))
+                except Exception as e:
+                    print("error when fetching %s" %table_name, e)
+                
+            
     def update_economic_data(self):
         """ 更新宏观经济数据 """
         table_map = {
@@ -131,20 +128,16 @@ class StockDataUpdater(StockData):
                             }
         for table_name, func in table_map.items():
             try:
-                md5_set = self.session.execute("select md5_without_op_day from "+str(table_name)).fetchall()
-                md5_set = set([str(i[0]) for i in md5_set])
-                
                 data = func()
-                data_md5 = add_md5_col(data)
                 data["op_month"] = str(self.year) + "-" + str(self.month)
-                data["md5_without_op_day"] = data_md5
-                data = data[~data["md5_without_op_day"].isin(md5_set)].reset_index(drop=True)
+                data = data.fillna("")
                 if len(data) > 0:
-                    data.to_sql(table_name, self.engine, if_exists="append", index=False)
-                print("---%s records added for table: %s with %ss used---" % (len(data), table_name, round(time.time()-tic, 1)))
+                    values = ",".join([str(tuple(i)) for i in data.values])
+                    self.session.execute("insert ignore into %s values %s; commit;" % (table_name, values))
+                print("---updated table: %s with %ss used---" % (table_name, round(time.time()-tic, 1)))
             except Exception as e:
                 print("error when fetching %s  with %ss used" %(table_name, round(time.time()-tic, 1)), e)
-                raise Exception(e)
+
 
     def update_trading_data(self):
         """ 
@@ -170,9 +163,13 @@ class StockDataUpdater(StockData):
             if idx % 100 == 0:
                 print("---%s stocks trading data fetched with %ss---" %(idx, round(time.time()-tic, 1)))
         data_all = data_all.reset_index(drop=True)
+        data_all["op_day"] = self.today
+        data_all = data_all.fillna("")
         if len(data_all) > 0:
-            data_all.to_sql("hist_trading_day", self.engine, if_exists="append", index=False)
-        print("---%s records added for hist_trading_day with %ss used---" % (len(data_all), round(time.time()-tic, 1)))
+            values = ",".join([str(tuple(i)) for i in data_all.values])
+            self.session.execute("insert ignore into hist_trading_day values %s; commit;" % (values))
+        print("---updated table: hist_trading_day with %ss used---" % (round(time.time()-tic, 1)))
+
         
     def update_bigdeal(self):
         """ 
@@ -205,9 +202,10 @@ class StockDataUpdater(StockData):
             self.update_stock_basics()
             self.update_stock_classification()
             self.update_economic_data()
+            self.update_stock_operating_data()
             self.update_trading_data()
             self.update_bigdeal()
-        
+            
     
 if __name__ == "__main__":
     is_update = True
