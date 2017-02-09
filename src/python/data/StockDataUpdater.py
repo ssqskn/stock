@@ -1,10 +1,13 @@
 #coding:utf-8
 from src.python.data.StockDataInitializer import fetch_bigdeal_one
 from src.python.api.StockData import StockData
-from src.python.utils.utils import add_md5_col, forward_ndays
+from src.python.utils.utils import forward_ndays
 import threadpool
 import tushare as ts
+import urllib
 import time
+import re
+
 
 tic = time.time()
 
@@ -43,7 +46,6 @@ class StockDataUpdater(StockData):
             print("error when fetching stock list", e)
         print("End updating stock list with %ss used" % round(time.time()-tic, 1))
 
-
     def update_stock_basics(self):
         """ 更新股票基本信息 """
         last_op_day = self.__get_op_day("stock_basics")
@@ -58,7 +60,6 @@ class StockDataUpdater(StockData):
         except Exception as e:
             print("error when updating stock basics", e)
         print("End updating stock basics with %ss used" % round(time.time()-tic, 1))
-
 
     def update_stock_classification(self):
         """ 更新股票分类数据 """
@@ -84,7 +85,6 @@ class StockDataUpdater(StockData):
             except Exception as e:
                 print("error when fetching %s  with %ss used" %(table_name, round(time.time()-tic, 1)), e)
 
-
     def update_stock_operating_data(self):
         """ 更新股票的运营数据"""
         table_map = {
@@ -108,8 +108,7 @@ class StockDataUpdater(StockData):
                     print("---updated table: %s with %ss used---" % (table_name, round(time.time()-tic, 1)))
                 except Exception as e:
                     print("error when fetching %s" %table_name, e)
-                
-            
+                        
     def update_economic_data(self):
         """ 更新宏观经济数据 """
         table_map = {
@@ -137,7 +136,6 @@ class StockDataUpdater(StockData):
                 print("---updated table: %s with %ss used---" % (table_name, round(time.time()-tic, 1)))
             except Exception as e:
                 print("error when fetching %s  with %ss used" %(table_name, round(time.time()-tic, 1)), e)
-
 
     def update_trading_data(self):
         """ 
@@ -169,8 +167,7 @@ class StockDataUpdater(StockData):
             values = ",".join([str(tuple(i)) for i in data_all.values])
             self.session.execute("insert ignore into hist_trading_day values %s; commit;" % (values))
         print("---updated table: hist_trading_day with %ss used---" % (round(time.time()-tic, 1)))
-
-        
+   
     def update_bigdeal(self):
         """ 
             更新所有股票的大单交易数据 
@@ -193,8 +190,36 @@ class StockDataUpdater(StockData):
             pool.putRequest(t)
         pool.wait()
         print("End updating history trading bigdeal data with time %ss" % round(time.time()-tic, 1))
-        
-        
+     
+    def update_shareholdertrading(self):
+        """更新股东持股数据"""
+        url = "http://data.eastmoney.com/DataCenter_V3/gdzjc.ashx?" +\
+                 "pagesize=500&page=PAGEN"+\
+                 "&js=var%20VNAYjVCO&param=&sortRule=-1&sortType=BDJZ&tabid=all&code=&name=&rt=49552046"
+        data = []
+        for i in range(1, 7):
+            for _ in range(3):       ##错误重试
+                try:
+                    respond_data = urllib.request.urlopen(url.replace("PAGEN", str(i)), timeout=20).read()
+                    respond_data = respond_data.decode("gbk").replace("\"]}","")  ##清除尾部字符
+                    respond_data = re.sub(r"var.+?\[\"", "", respond_data)             ##清除头部字符
+                    records = respond_data.split("\",\"")
+                    break
+                except Exception as e:
+                    print("error: ", e)
+                    time.sleep(1)
+            if len(records) < 2: break
+            else:
+                for rec in records:
+                    data.append(rec.split(",")) 
+            time.sleep(1)     ##休眠1秒，防止被网站屏蔽
+            print("--page:%s, records: %s--" % (i, len(data)))
+        if len(data) > 0:
+            data = [i+[self.today] for i in data]
+            values = ",".join([str(tuple(i)) for i in data])
+            self.session.execute("insert ignore into hist_shareholder_trading values %s; commit;" % (values))
+            print("---updated table: hist_shareholder_trading with %ss used---" % (round(time.time()-tic, 1)))
+                
     def update_all(self, is_update=False):
         """ 更新所有数据 """
         if is_update:
@@ -205,10 +230,11 @@ class StockDataUpdater(StockData):
             self.update_stock_operating_data()
             self.update_trading_data()
             self.update_bigdeal()
-            
+        self.update_shareholdertrading()
+    
     
 if __name__ == "__main__":
-    is_update = True
+    is_update = False
     stockDataUpdater = StockDataUpdater()
     stockDataUpdater.update_all(is_update=is_update)
 

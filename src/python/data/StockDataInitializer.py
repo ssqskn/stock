@@ -4,8 +4,12 @@ from src.python.utils.sql_engine import SqlEngine
 from config.sql_account import BIGDEAL_VOL
 import tushare.util.dateu as du
 import threading, threadpool
+import pandas as pd
 import tushare as ts
+import urllib
 import time
+import re
+
 
 tic = time.time()
 counter_for_bigdeal = 0
@@ -178,6 +182,40 @@ class StockDataInitializer(StockData):
         result_cursor.close()
         print("End fetching history trading bigdeal data with time %ss" % round(time.time()-tic, 1))
 
+    def __fetch_shareholderstrading(self):
+        """获取股东持股数据"""
+        url = "http://data.eastmoney.com/DataCenter_V3/gdzjc.ashx?" +\
+                 "pagesize=500&page=PAGEN"+\
+                 "&js=var%20VNAYjVCO&param=&sortRule=-1&sortType=BDJZ&tabid=all&code=&name=&rt=49552046"
+        data = []
+        for i in range(1, 100):
+            for _ in range(3):       ##错误重试
+                try:
+                    respond_data = urllib.request.urlopen(url.replace("PAGEN", str(i)), timeout=20).read()
+                    respond_data = respond_data.decode("gbk").replace("\"]}","")  ##清除尾部字符
+                    respond_data = re.sub(r"var.+?\[\"", "", respond_data)             ##清除头部字符
+                    records = respond_data.split("\",\"")
+                    break
+                except Exception as e:
+                    print("error: ", e)
+                    time.sleep(1)
+            if len(records) < 2: break
+            else:
+                for rec in records:
+                    data.append(rec.split(",")) 
+            time.sleep(1)     ##休眠1秒，防止被网站屏蔽
+            print("--page:%s, records: %s--" % (i, len(data)))
+        data = pd.DataFrame(data, columns=["code", "name", "price", "change", "shareholder", "ch_flag", "ch_quant", \
+                                                                  "ch_ratiofloat", "place", "tot_quant", "tot_ratiototal", "tot_quantfloat",\
+                                                                  "tot_ratiofloat", "startday", "endday", "announceday", "ch_ratiototal"])
+        data = data.drop_duplicates(["code","shareholder", "ch_flag", "ch_quant", "tot_quant", "announceday"]).reset_index(drop=True)
+        print("End fetching trading data of major shareholders with time %ss, total page:%s, total records:%s" \
+                 % (round(time.time()-tic, 1), str(i), len(data)))
+        data["op_day"] = self.today
+        data.to_sql("hist_shareholder_trading", self.engine, if_exists="replace", index=False)
+        self.session.execute("alter table hist_shareholder_trading add unique key" +\
+                                      "hist_shareholder_1(code(6), shareholder(50), ch_flag(10), ch_quant(15), tot_quant(15), announceday(10));")
+           
     def fetch_all(self, is_first_time=False):
         """ 获取所有数据 """
         ##TODO: is_first_time需要通过检查数据库中是否有表来判断
@@ -187,9 +225,9 @@ class StockDataInitializer(StockData):
             self.__fetch_stock_classification()
             self.__fetch_stock_operating_data()
             self.__fetch_economic_data()
+            self.__fetch_shareholderstrading()
             self.__fetch_trading_data()
             self.__fetch_bigdeal_all(start="2016-12-28", end=self.today)
-
         
 def fetch_bigdeal_one(rec):
     """ 获取一条大单数据 """
