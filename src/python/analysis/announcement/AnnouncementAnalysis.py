@@ -1,6 +1,5 @@
 #coding:utf-8
 
-import pandas as pd
 from src.python.analysis.announcement.index_function import *
 
 
@@ -49,12 +48,18 @@ def announcement_analysis(file_path, year):
     data["固定资产周转率"] = get_turnover_ratio_of_fixed_assets(data, data_b1y)
     data["总资产周转率"] = get_turnover_ratio_of_total_assets(data, data_b1y)
     
+    list_stock_info(data, code=600519)
+    #list_stock_info(data, code=600519, part='balance')
+    #list_stock_info(data, code=600519, part='profit')
+    #list_stock_info(data, code=600519, part='cash')
     
-    
-    print(data.ix[data["code"] == 600519 ,["code", "roe", "总资产收益率", "毛利率", "净利率", "营业利润率",\
-            "经营现金流净额占净利润比", "费用占毛利润比", "流动比率", "速动比率", "资产负债率", "净资产负债率",\
-            "营业收入增长率", "营业利润增长率", "总资产增长率", "净资产增长率", "应收账款周转率", "固定资产周转率",\
-            "总资产周转率", "存货周转率"]])
+    draw_plot_of_index(file_dir="D:/zzz/app/EclipseWorkspace/stock/data/", 
+            start_year=2011, end_year=2015, code=600519, col_name="营业收入(元)")
+    draw_plot_of_index(file_dir="D:/zzz/app/EclipseWorkspace/stock/data/", 
+            start_year=2011, end_year=2015, code=600519, col_name="roe", func=get_roe)
+    draw_plot_of_index(file_dir="D:/zzz/app/EclipseWorkspace/stock/data/", 
+            start_year=2011, end_year=2015, code=600519, col_name="净利率", func=get_net_profit_rate)
+
     
 
     
